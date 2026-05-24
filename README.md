@@ -1,14 +1,11 @@
 # jardy-coin 
 
-a peer-to-peer blockchain built from scratch in c++. no libraries, no frameworks, no shortcuts. just raw tcp sockets, sha-256 proof-of-work, and vibes.
-
+a peer-to-peer blockchain in c++. 
 ---
 
 ## what is this
 
-jardy-coin is a fully functional distributed ledger that runs across multiple machines on a local network. every node mines, every node validates, and the network converges on a single canonical chain through nakamoto consensus (longest chain wins, no exceptions, no feelings).
-
-it was built layer by layer — block → chain → json serialization → tcp sync → mesh network → transactions — so every piece is understood before the next one is added.
+jardy-coin is a distributed ledger that runs across multiple machines on a local network. every node mines, every node validates, and the network converges on a single canonical chain through nakamoto consensus (longest chain wins, no exceptions, no feelings).
 
 ---
 
@@ -68,5 +65,3 @@ help                      you're looking at it
 - **docker** — multi-stage debian:bookworm-slim image
 
 ---
-
-*named after its creator. not financial advice.*
