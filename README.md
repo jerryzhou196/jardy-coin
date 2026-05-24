@@ -1,7 +1,6 @@
 # jardy-coin 
 
 a peer-to-peer blockchain in c++. 
----
 
 ## what is this
 
