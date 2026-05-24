@@ -1,4 +1,4 @@
-# jardy-coin 🪙
+# jardy-coin 
 
 a peer-to-peer blockchain built from scratch in c++. no libraries, no frameworks, no shortcuts. just raw tcp sockets, sha-256 proof-of-work, and vibes.
 
