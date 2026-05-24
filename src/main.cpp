@@ -1,30 +1,102 @@
-#include "node.hpp"
+#include "network_manager.hpp"
 
+#include <csignal>
+#include <ctime>
 #include <iostream>
+#include <sstream>
 #include <string>
+#include <thread>
 
 // ---------------------------------------------------------------------------
-// Layer 4 driver
+// Layer 6 driver
 //
-// Run as a listener (no --peer flag):
+// Node A (listener, no --peer):
 //   ./blockchain --port 8333
 //
-// Run as a connector (with --peer):
+// Node B (connects to A):
 //   ./blockchain --port 8334 --peer 127.0.0.1:8333
 //
-// The connecting node mines one extra block so we can observe the
-// longest-chain rule fire on the listening side.
+// Node C (connects to A and B):
+//   ./blockchain --port 8335 --peer 127.0.0.1:8333 --peer 127.0.0.1:8334
+//
+// Interactive commands (type while the node is running):
+//   tx <from> <to> <amount>   — validated transaction (sender must have funds)
+//   balance <address>         — show address balance
+//   chain                     — print all blocks in the local chain
+//   help                      — show this list
 // ---------------------------------------------------------------------------
+
+static NetworkManager* g_net = nullptr;
+
+static void sigHandler(int) {
+    std::cout << "\n[main] shutting down" << std::endl;
+    if (g_net) g_net->stop();
+}
 
 static void usage(const char* argv0) {
     std::cerr << "usage: " << argv0
-              << " --port <port> [--peer <ip>:<port>]\n";
+              << " --port <port> [--peer <ip>:<port>] ...\n";
+}
+
+static void printHelp() {
+    std::cout << "commands:\n"
+              << "  tx <from> <to> <amount>  validated transaction\n"
+              << "  balance [address]        show all balances, or one address\n"
+              << "  chain                    print local chain\n"
+              << "  help                     show this list\n";
+}
+
+static void cliLoop(NetworkManager& net) {
+    printHelp();
+    std::string line;
+    while (std::getline(std::cin, line)) {
+        if (line.empty()) continue;
+
+        std::istringstream ss(line);
+        std::string cmd;
+        ss >> cmd;
+
+        if (cmd == "tx") {
+            std::string from, to;
+            int64_t amount = 0;
+            if (!(ss >> from >> to >> amount)) {
+                std::cerr << "usage: tx <from> <to> <amount>\n";
+                continue;
+            }
+            Transaction tx{
+                from, to, amount,
+                /*fee=*/0,
+                static_cast<int64_t>(std::time(nullptr)),
+                /*signature=*/"cli"
+            };
+            if (net.submitManualTransaction(std::move(tx))) {
+                std::cout << "[cli] chain (" << net.chainLength() << " blocks):\n";
+                net.printChain();
+            }
+        } else if (cmd == "balance") {
+            std::string addr;
+            if (ss >> addr) {
+                std::cout << "[cli] " << addr << " = " << net.getBalance(addr) << "\n";
+            } else {
+                auto balances = net.allBalances();
+                if (balances.empty()) { std::cout << "[cli] no balances yet\n"; continue; }
+                for (const auto& kv : balances)
+                    std::cout << "  " << kv.first << " = " << kv.second << "\n";
+            }
+        } else if (cmd == "chain") {
+            std::cout << "[cli] chain (" << net.chainLength() << " blocks):\n";
+            net.printChain();
+        } else if (cmd == "help") {
+            printHelp();
+        } else {
+            std::cerr << "unknown command: " << cmd << "  (type 'help')\n";
+        }
+    }
 }
 
 int main(int argc, char* argv[]) {
-    int         port     = 0;
-    std::string peerHost;
-    int         peerPort = 0;
+    int port = 0;
+    std::vector<std::pair<std::string,int>> peers;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -34,49 +106,54 @@ int main(int argc, char* argv[]) {
             std::string peer = argv[++i];
             auto colon = peer.rfind(':');
             if (colon == std::string::npos) { usage(argv[0]); return 1; }
-            peerHost = peer.substr(0, colon);
-            peerPort = std::stoi(peer.substr(colon + 1));
+            peers.push_back({
+                peer.substr(0, colon),
+                std::stoi(peer.substr(colon + 1))
+            });
         }
     }
 
     if (port == 0) { usage(argv[0]); return 1; }
 
-    constexpr int DIFFICULTY = 3;   // lower for fast demo; bump to 4+ for real use
-    Node node(DIFFICULTY);
+    constexpr int DIFFICULTY = 5;
+    NetworkManager net(DIFFICULTY, port);
+    g_net = &net;
 
-    if (peerHost.empty()) {
-        // -----------------------------------------------------------------------
-        // Listener: mine 2 blocks, then wait for a peer to connect and sync.
-        // -----------------------------------------------------------------------
-        std::cout << "[main] mining initial blocks...\n";
-        node.submitTransaction({"Alice", "Bob",     500, 1, 1716500100, "sig1"});
-        node.submitTransaction({"Bob",   "Charlie", 200, 1, 1716500200, "sig2"});
+    std::signal(SIGINT,  sigHandler);
+    std::signal(SIGTERM, sigHandler);
 
-        std::cout << "[main] chain before sync (" << node.chainLength() << " blocks):\n";
-        node.printChain();
+    for (const auto& peer : peers) {
+        net.addPeer(peer.first, peer.second);
+    }
 
-        node.listen(port);
 
-        std::cout << "[main] chain after sync (" << node.chainLength() << " blocks):\n";
-        node.printChain();
+    // Continuously mine coinbase blocks — difficulty is the rate limiter.
+    std::thread miner([&net, port]() {
+        const std::string minerAddr = "node-" + std::to_string(port);
+        while (true) {
+            Transaction coinbase{
+                "network", minerAddr,
+                /*amount=*/50, /*fee=*/0,
+                static_cast<int64_t>(std::time(nullptr)),
+                "coinbase"
+            };
+            net.submitTransaction(std::move(coinbase));
+            std::cout << "[miner] block " << net.chainLength()
+                      << "  balance=" << net.getBalance(minerAddr) << std::endl;
+        }
+    });
+    miner.detach();
 
-    } else {
-        // -----------------------------------------------------------------------
-        // Connector: mine 3 blocks (longer chain), connect, and sync.
-        // The listener should adopt our chain because it's longer.
-        // -----------------------------------------------------------------------
-        std::cout << "[main] mining initial blocks...\n";
-        node.submitTransaction({"Alice", "Bob",     500, 1, 1716500100, "sig1"});
-        node.submitTransaction({"Bob",   "Charlie", 200, 1, 1716500200, "sig2"});
-        node.submitTransaction({"Charlie", "Dave",  100, 1, 1716500300, "sig3"});
+    std::thread cli([&net]() { cliLoop(net); });
+    cli.detach();
 
-        std::cout << "[main] chain before sync (" << node.chainLength() << " blocks):\n";
-        node.printChain();
-
-        node.connect(peerHost, peerPort);
-
-        std::cout << "[main] chain after sync (" << node.chainLength() << " blocks):\n";
-        node.printChain();
+    try {
+        net.run();
+    } catch (const std::exception& e) {
+        std::cerr << "[main] fatal: " << e.what() << "\n"
+                  << "       Is port " << port << " already in use?\n"
+                  << "       Run: lsof -i :" << port << "\n";
+        return 1;
     }
 
     return 0;

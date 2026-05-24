@@ -13,6 +13,7 @@ set(SOURCES
     src/chain.cpp
     src/crypto.cpp
     src/node.cpp
+    src/network_manager.cpp
 )
 
 add_executable(blockchain ${SOURCES})

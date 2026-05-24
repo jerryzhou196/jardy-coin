@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <sstream>
+#include <iostream>
 
 // --- Transaction ---
 
@@ -60,10 +61,20 @@ std::string Block::calculateHash() const {
 }
 
 void Block::mine(int difficulty) {
+    std::atomic<bool> neverStop{false};
+    mine(difficulty, neverStop);
+}
+
+void Block::mine(int difficulty, std::atomic<bool>& stop) {
     const std::string target(difficulty, '0');
-    while (hash.substr(0, difficulty) != target) {
+    while (hash.substr(0, difficulty) != target && !stop.load()) {
         ++pow;
         hash = calculateHash();
+    } 
+    if (!stop.load()){
+        std::cout << "[net] mined block " << height << " with hash " << hash << std::endl;
+    } else {
+        std::cout << "[net] mining stopped because of better block\n";
     }
 }
 

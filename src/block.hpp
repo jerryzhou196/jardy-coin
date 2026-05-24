@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -63,7 +64,9 @@ public:
     std::string calculateHash() const;
 
     // Increments pow until hash has `difficulty` leading '0' characters.
+    // The stop overload exits early if stop is set to true mid-mine.
     void mine(int difficulty);
+    void mine(int difficulty, std::atomic<bool>& stop);
 
 private:
     static int64_t currentTimestamp();
