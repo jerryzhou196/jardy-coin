@@ -2,11 +2,24 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug blockchain",
+            "name": "Debug blockchain (listener)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/blockchain",
-            "args": [],
+            "args": ["--port", "8333"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "preLaunchTask": "cmake: build"
+        },
+        {
+            "name": "Debug blockchain (connector)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/blockchain",
+            "args": ["--port", "8334", "--peer", "127.0.0.1:8333"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

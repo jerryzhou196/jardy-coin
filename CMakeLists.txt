@@ -12,6 +12,7 @@ set(SOURCES
     src/block.cpp
     src/chain.cpp
     src/crypto.cpp
+    src/node.cpp
 )
 
 add_executable(blockchain ${SOURCES})
