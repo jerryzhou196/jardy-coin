@@ -2,6 +2,7 @@
 #include "serialization.hpp"
 
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -131,25 +132,27 @@ void NetworkManager::addPeer(const std::string& host, int port) {
 }
 
 void NetworkManager::syncWithPeer(const std::string& host, int port) {
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) { std::cerr << "[net] socket() failed\n"; return; }
-
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-
-    if (inet_pton(AF_INET, host.c_str(), &addr.sin_addr) <= 0) {
-        std::cerr << "[net] invalid address: " << host << std::endl;
-        close(fd);
+    // Use getaddrinfo so both raw IPs and Docker/DNS hostnames are accepted.
+    addrinfo hints{}, *res;
+    hints.ai_family   = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    std::string portStr = std::to_string(port);
+    if (getaddrinfo(host.c_str(), portStr.c_str(), &hints, &res) != 0) {
+        std::cerr << "[net] could not resolve: " << host << std::endl;
         return;
     }
 
-    if (::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+    int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (fd < 0) { freeaddrinfo(res); std::cerr << "[net] socket() failed\n"; return; }
+
+    if (::connect(fd, res->ai_addr, res->ai_addrlen) < 0) {
+        freeaddrinfo(res);
         std::cerr << "[net] could not connect to " << host << ":" << port << std::endl;
         close(fd);
         return;
     }
 
+    freeaddrinfo(res);
     std::cout << "[net] connected to " << host << ":" << port << std::endl;
     exchangeChains(fd);
     close(fd);

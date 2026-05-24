@@ -1,0 +1,23 @@
+services:
+  node-a:
+    build: .
+    command: --port 8333
+    ports:
+      - "8333:8333"
+
+  node-b:
+    build: .
+    command: ["sh", "-c", "sleep 2 && blockchain --port 8333 --peer node-a:8333"]
+    ports:
+      - "8334:8333"
+    depends_on:
+      - node-a
+
+  node-c:
+    build: .
+    command: ["sh", "-c", "sleep 4 && blockchain --port 8333 --peer node-a:8333 --peer node-b:8333"]
+    ports:
+      - "8335:8333"
+    depends_on:
+      - node-a
+      - node-b
