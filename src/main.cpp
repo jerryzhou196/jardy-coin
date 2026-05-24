@@ -1,66 +1,44 @@
-#include "block.hpp"
-
+#include "chain.hpp"
 #include <iostream>
 
-// Layer 1 driver — manually builds 3 blocks and mines each one.
-// Nothing is persisted or networked yet; this just proves the core
-// hashing and proof-of-work loop work correctly before we add the chain.
-
-static void printBlock(const Block& b) {
-    std::cout << "  height   : " << b.height        << "\n"
-              << "  prevHash : " << b.previousHash  << "\n"
-              << "  hash     : " << b.hash          << "\n"
-              << "  pow      : " << b.pow           << "\n\n";
+static void printChain(const Blockchain& bc) {
+    for (const Block& b : bc.blocks()) {
+        std::cout << "  [" << b.height << "]"
+                  << "  hash=" << b.hash.substr(0, 16) << "..."
+                  << "  pow="  << b.pow << "\n";
+    }
 }
 
 int main() {
-    constexpr int DIFFICULTY = 4;   // hash must start with "0000"
+    constexpr int DIFFICULTY = 4;
+
+    Blockchain bc(DIFFICULTY);
 
     // -----------------------------------------------------------------------
-    // Block 0 — genesis
-    // The genesis block is special: its previousHash is an arbitrary sentinel
-    // ("0") because nothing came before it.
+    // Add 4 blocks on top of the genesis block.
+    // addBlock() mines before appending, so each call takes a moment.
     // -----------------------------------------------------------------------
-    BlockData genesisData{{ Transaction{"network", "Alice", 1000, 0, 1716500000, "genesis"} }};
-    Block genesis(genesisData, "0", 0);
-    genesis.mine(DIFFICULTY);
+    bc.addBlock({{ Transaction{"Alice",   "Bob",     500, 1, 1716500100, "sig1"} }});
+    bc.addBlock({{ Transaction{"Bob",     "Charlie", 200, 1, 1716500200, "sig2"} }});
+    bc.addBlock({{ Transaction{"Charlie", "Dave",    100, 1, 1716500300, "sig3"} }});
+    bc.addBlock({{ Transaction{"Dave",    "Alice",    50, 1, 1716500400, "sig4"} }});
 
-    std::cout << "=== Block 0 (genesis) ===\n";
-    printBlock(genesis);
-
-    // -----------------------------------------------------------------------
-    // Block 1
-    // previousHash = genesis.hash  →  any change to genesis breaks this hash.
-    // -----------------------------------------------------------------------
-    BlockData data1{{ Transaction{"Alice", "Bob", 500, 1, 1716500100, "sig_alice"} }};
-    Block block1(data1, genesis.hash, 1);
-    block1.mine(DIFFICULTY);
-
-    std::cout << "=== Block 1 ===\n";
-    printBlock(block1);
+    std::cout << "=== chain (" << bc.length() << " blocks) ===\n";
+    printChain(bc);
+    std::cout << "valid: " << (bc.isValid() ? "YES" : "NO") << "\n\n";
 
     // -----------------------------------------------------------------------
-    // Block 2
+    // Tamper: mutate a transaction deep in the chain.
+    // isValid() must catch it because the stored hash no longer matches
+    // a fresh recalculation of that block.
     // -----------------------------------------------------------------------
-    BlockData data2{{ Transaction{"Bob", "Charlie", 200, 1, 1716500200, "sig_bob"} }};
-    Block block2(data2, block1.hash, 2);
-    block2.mine(DIFFICULTY);
+    std::cout << "--- tamper block 2, amount 200 -> 9999 ---\n";
+    // chain_ is private, but we can get a mutable ref via const_cast for the demo.
+    // In production code nothing outside Blockchain touches the vector directly.
+    Block& tampered = const_cast<Block&>(bc.blocks()[2]);
+    tampered.data.transactions[0].amount = 9999;
 
-    std::cout << "=== Block 2 ===\n";
-    printBlock(block2);
-
-    // -----------------------------------------------------------------------
-    // Tamper check — mutate Block 1's data and recompute its hash.
-    // block2.previousHash still points to the OLD block1.hash, so the chain
-    // is now broken.  Layer 2 will add isValid() to catch this automatically.
-    // -----------------------------------------------------------------------
-    std::cout << "--- tamper demo ---\n";
-    block1.data.transactions[0].amount = 9999;          // attacker changes amount
-    std::string tamperedHash = block1.calculateHash();  // new hash after mutation
-    std::cout << "block1 stored hash : " << block1.hash    << "\n";
-    std::cout << "block1 fresh hash  : " << tamperedHash   << "\n";
-    std::cout << "block2 prevHash    : " << block2.previousHash << "\n";
-    std::cout << (tamperedHash == block2.previousHash ? "chain intact" : "chain BROKEN") << "\n";
+    std::cout << "valid after tamper: " << (bc.isValid() ? "YES" : "NO") << "\n";
 
     return 0;
 }

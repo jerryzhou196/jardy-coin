@@ -10,6 +10,7 @@ find_package(OpenSSL REQUIRED)
 set(SOURCES
     src/main.cpp
     src/block.cpp
+    src/chain.cpp
     src/crypto.cpp
 )
 
