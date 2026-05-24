@@ -39,6 +39,16 @@ Block::Block(BlockData data, std::string previousHash, int height)
     hash = calculateHash();
 }
 
+Block::Block(BlockData data, std::string previousHash, int height,
+             int64_t timestamp, int pow, std::string hash)
+    : data(std::move(data))
+    , previousHash(std::move(previousHash))
+    , timestamp(timestamp)
+    , height(height)
+    , pow(pow)
+    , hash(std::move(hash))
+{}
+
 std::string Block::calculateHash() const {
     std::ostringstream oss;
     oss << previousHash    << "\n"

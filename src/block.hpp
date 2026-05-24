@@ -51,7 +51,13 @@ public:
     int         height;
     int         pow;
 
+    // Normal constructor: sets timestamp to now, computes initial hash.
     Block(BlockData data, std::string previousHash, int height);
+
+    // Restore constructor: used by deserialization to rebuild an already-mined
+    // block from its stored fields without re-mining or touching the clock.
+    Block(BlockData data, std::string previousHash, int height,
+          int64_t timestamp, int pow, std::string hash);
 
     // Recomputes the hash from current field values.
     std::string calculateHash() const;

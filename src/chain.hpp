@@ -17,7 +17,13 @@
 // ---------------------------------------------------------------------------
 class Blockchain {
 public:
+    // Normal constructor: creates and mines the genesis block.
     explicit Blockchain(int difficulty);
+
+    // Restore constructor: used by deserialization to load a pre-built chain
+    // received from the network. No genesis block is created; blocks are
+    // stored as-is and isValid() should be called to verify them.
+    Blockchain(std::vector<Block> blocks, int difficulty);
 
     // Mine a new block containing `data` and append it to the chain.
     void addBlock(BlockData data);
@@ -25,8 +31,9 @@ public:
     // Returns true only if every block satisfies both invariants above.
     bool isValid() const;
 
-    const std::vector<Block>& blocks() const { return chain_; }
-    int length() const { return static_cast<int>(chain_.size()); }
+    const std::vector<Block>& blocks()     const { return chain_; }
+    int                       length()     const { return static_cast<int>(chain_.size()); }
+    int                       difficulty() const { return difficulty_; }
 
 private:
     std::vector<Block> chain_;

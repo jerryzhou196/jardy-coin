@@ -6,6 +6,11 @@ Blockchain::Blockchain(int difficulty)
     chain_.push_back(makeGenesis());
 }
 
+Blockchain::Blockchain(std::vector<Block> blocks, int difficulty)
+    : chain_(std::move(blocks))
+    , difficulty_(difficulty)
+{}
+
 Block Blockchain::makeGenesis() const {
     BlockData data{{ Transaction{"network", "genesis", 0, 0, 0, "genesis"} }};
     Block b(data, "0", 0);

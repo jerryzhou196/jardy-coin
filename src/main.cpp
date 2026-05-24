@@ -1,44 +1,71 @@
 #include "chain.hpp"
-#include <iostream>
+#include "serialization.hpp"
 
-static void printChain(const Blockchain& bc) {
-    for (const Block& b : bc.blocks()) {
-        std::cout << "  [" << b.height << "]"
-                  << "  hash=" << b.hash.substr(0, 16) << "..."
-                  << "  pow="  << b.pow << "\n";
-    }
-}
+#include <fstream>
+#include <iostream>
 
 int main() {
     constexpr int DIFFICULTY = 4;
 
-    Blockchain bc(DIFFICULTY);
+    // -----------------------------------------------------------------------
+    // Build a small chain on "Node A".
+    // -----------------------------------------------------------------------
+    Blockchain nodeA(DIFFICULTY);
+    nodeA.addBlock({{ Transaction{"Alice", "Bob",     500, 1, 1716500100, "sig1"} }});
+    nodeA.addBlock({{ Transaction{"Bob",   "Charlie", 200, 1, 1716500200, "sig2"} }});
+
+    std::cout << "=== Node A chain (" << nodeA.length() << " blocks) ===\n";
+    for (const Block& b : nodeA.blocks()) {
+        std::cout << "  [" << b.height << "] " << b.hash.substr(0, 20) << "...\n";
+    }
 
     // -----------------------------------------------------------------------
-    // Add 4 blocks on top of the genesis block.
-    // addBlock() mines before appending, so each call takes a moment.
+    // Serialize to a JSON string — this is exactly what will travel over the
+    // TCP socket in Layer 4.  The whole chain becomes one UTF-8 string.
     // -----------------------------------------------------------------------
-    bc.addBlock({{ Transaction{"Alice",   "Bob",     500, 1, 1716500100, "sig1"} }});
-    bc.addBlock({{ Transaction{"Bob",     "Charlie", 200, 1, 1716500200, "sig2"} }});
-    bc.addBlock({{ Transaction{"Charlie", "Dave",    100, 1, 1716500300, "sig3"} }});
-    bc.addBlock({{ Transaction{"Dave",    "Alice",    50, 1, 1716500400, "sig4"} }});
+    json j = nodeA;
+    std::string wire = j.dump(2);   // pretty-print with 2-space indent
 
-    std::cout << "=== chain (" << bc.length() << " blocks) ===\n";
-    printChain(bc);
-    std::cout << "valid: " << (bc.isValid() ? "YES" : "NO") << "\n\n";
+    std::cout << "\n=== wire payload (first 300 chars) ===\n"
+              << wire.substr(0, 300) << "...\n";
 
     // -----------------------------------------------------------------------
-    // Tamper: mutate a transaction deep in the chain.
-    // isValid() must catch it because the stored hash no longer matches
-    // a fresh recalculation of that block.
+    // Write to disk so you can inspect it in the editor.
     // -----------------------------------------------------------------------
-    std::cout << "--- tamper block 2, amount 200 -> 9999 ---\n";
-    // chain_ is private, but we can get a mutable ref via const_cast for the demo.
-    // In production code nothing outside Blockchain touches the vector directly.
-    Block& tampered = const_cast<Block&>(bc.blocks()[2]);
-    tampered.data.transactions[0].amount = 9999;
+    {
+        std::ofstream f("chain.json");
+        f << wire;
+    }
+    std::cout << "\nWrote chain.json\n";
 
-    std::cout << "valid after tamper: " << (bc.isValid() ? "YES" : "NO") << "\n";
+    // -----------------------------------------------------------------------
+    // Deserialize on "Node B" — parse the string back into a Blockchain.
+    // This is the receiving side of the sync handshake in Layer 4.
+    // -----------------------------------------------------------------------
+    Blockchain nodeB = blockchain_from_json(json::parse(wire));
+
+    std::cout << "\n=== Node B (deserialized) (" << nodeB.length() << " blocks) ===\n";
+    for (const Block& b : nodeB.blocks()) {
+        std::cout << "  [" << b.height << "] " << b.hash.substr(0, 20) << "...\n";
+    }
+
+    // -----------------------------------------------------------------------
+    // Verify: both chains should be valid and their hashes identical.
+    // -----------------------------------------------------------------------
+    bool aValid = nodeA.isValid();
+    bool bValid = nodeB.isValid();
+    bool match  = (json(nodeA).dump() == json(nodeB).dump());
+
+    std::cout << "\nNode A valid : " << (aValid ? "YES" : "NO") << "\n";
+    std::cout << "Node B valid : " << (bValid ? "YES" : "NO") << "\n";
+    std::cout << "Chains match : " << (match  ? "YES" : "NO") << "\n";
+
+    // -----------------------------------------------------------------------
+    // Tamper the deserialized chain and confirm isValid() catches it.
+    // -----------------------------------------------------------------------
+    const_cast<Block&>(nodeB.blocks()[1]).data.transactions[0].amount = 9999;
+    std::cout << "\nAfter tampering Node B block 1:\n";
+    std::cout << "Node B valid : " << (nodeB.isValid() ? "YES" : "NO") << "\n";
 
     return 0;
 }
