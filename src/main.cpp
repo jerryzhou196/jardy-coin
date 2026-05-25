@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
 
     if (port == 0) { usage(argv[0]); return 1; }
 
-    constexpr int DIFFICULTY = 5;
+    constexpr int DIFFICULTY = 7;
     NetworkManager net(DIFFICULTY, port, verbose);
     g_net = &net;
 
