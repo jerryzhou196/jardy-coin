@@ -41,9 +41,10 @@ void NetworkManager::writeLine(int fd, const std::string& s) {
 // Constructor / destructor
 // ---------------------------------------------------------------------------
 
-NetworkManager::NetworkManager(int difficulty, int listenPort)
+NetworkManager::NetworkManager(int difficulty, int listenPort, bool verbose)
     : chain_(difficulty)
     , listenPort_(listenPort)
+    , verbose_(verbose)
 {}
 
 NetworkManager::~NetworkManager() {
@@ -277,8 +278,10 @@ std::string NetworkManager::serializeChain() const {
 
 void NetworkManager::adoptIfBetter(Blockchain incoming) {
     std::lock_guard<std::mutex> lock(chainMutex_);
-    std::cout << "[net] -- local  --\n" << chain_    << std::endl;
-    std::cout << "[net] -- peer   --\n" << incoming  << std::endl;
+    if (verbose_) {
+        std::cout << "[net] -- local  --\n" << chain_   << std::endl;
+        std::cout << "[net] -- peer   --\n" << incoming << std::endl;
+    }
     if (incoming.isValid() && incoming.length() > chain_.length()) {
         stopMining = true;
         std::cout << "[net] adopted peer chain (" << incoming.length()

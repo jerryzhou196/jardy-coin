@@ -27,7 +27,7 @@
 // ---------------------------------------------------------------------------
 class NetworkManager {
 public:
-    NetworkManager(int difficulty, int listenPort);
+    NetworkManager(int difficulty, int listenPort, bool verbose = true);
     ~NetworkManager();
 
     // Dial out to a peer and perform an initial chain sync.
@@ -58,7 +58,8 @@ private:
     std::mutex                              peersMutex_;
     std::vector<std::pair<std::string,int>> peers_;  // (host, port)
 
-    std::atomic<bool>                             stopMining {false};
+    std::atomic<bool> stopMining {false};
+    bool              verbose_;
 
     // ---- server ----
     int              listenPort_;

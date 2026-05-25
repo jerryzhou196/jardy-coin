@@ -35,7 +35,7 @@ static void sigHandler(int) {
 
 static void usage(const char* argv0) {
     std::cerr << "usage: " << argv0
-              << " --port <port> [--peer <ip>:<port>] ...\n";
+              << " --port <port> [--peer <ip>:<port>] ... [--quiet]\n";
 }
 
 static void printHelp() {
@@ -95,7 +95,8 @@ static void cliLoop(NetworkManager& net) {
 }
 
 int main(int argc, char* argv[]) {
-    int port = 0;
+    int  port    = 0;
+    bool verbose = true;
     std::vector<std::pair<std::string,int>> peers;
 
     for (int i = 1; i < argc; ++i) {
@@ -110,13 +111,15 @@ int main(int argc, char* argv[]) {
                 peer.substr(0, colon),
                 std::stoi(peer.substr(colon + 1))
             });
+        } else if (arg == "--quiet") {
+            verbose = false;
         }
     }
 
     if (port == 0) { usage(argv[0]); return 1; }
 
     constexpr int DIFFICULTY = 5;
-    NetworkManager net(DIFFICULTY, port);
+    NetworkManager net(DIFFICULTY, port, verbose);
     g_net = &net;
 
     std::signal(SIGINT,  sigHandler);
@@ -128,7 +131,7 @@ int main(int argc, char* argv[]) {
 
 
     // Continuously mine coinbase blocks — difficulty is the rate limiter.
-    std::thread miner([&net, port]() {
+    std::thread miner([&net, port, verbose]() {
         const std::string minerAddr = "node-" + std::to_string(port);
         while (true) {
             Transaction coinbase{
@@ -138,8 +141,9 @@ int main(int argc, char* argv[]) {
                 "coinbase"
             };
             net.submitTransaction(std::move(coinbase));
-            std::cout << "[miner] block " << net.chainLength()
-                      << "  balance=" << net.getBalance(minerAddr) << std::endl;
+            if (verbose)
+                std::cout << "[miner] block " << net.chainLength()
+                          << "  balance=" << net.getBalance(minerAddr) << std::endl;
         }
     });
     miner.detach();
